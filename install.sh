@@ -1,21 +1,28 @@
 #!/bin/sh
 # エージェント向けの指示と設定を、インストール済みのエージェントに配置する。
 #
-#   curl -fsSL https://raw.githubusercontent.com/urihcim/agent-setup/main/install.sh | sh
+#   gh api -H "Accept: application/vnd.github.raw" /repos/urihcim/agent-setup/contents/install.sh | sh
 #
 # チェックアウト済みのリポジトリから実行した場合はその内容を使い、
-# それ以外（curl からの実行など）は最新のアーカイブを取得して使う。
+# それ以外（パイプでの実行など）は最新のアーカイブを取得して使う。
+# private リポジトリでも取得できるよう、gh があれば gh api を使う。
 set -eu
 
 REPO=${AGENT_SETUP_REPO:-urihcim/agent-setup}
 REF=${AGENT_SETUP_REF:-main}
 
-src=$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)
+src=
+if [ "$(basename "$0")" = install.sh ] && [ -f "$0" ]; then
+	src=$(cd "$(dirname "$0")" && pwd)
+fi
 if [ -z "$src" ] || [ ! -f "$src/AGENTS.md" ]; then
 	src=$(mktemp -d)
 	trap 'rm -rf "$src"' EXIT
-	curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.tar.gz" |
-		tar -xz -C "$src" --strip-components=1
+	if command -v gh >/dev/null 2>&1; then
+		gh api "repos/$REPO/tarball/$REF"
+	else
+		curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.tar.gz"
+	fi | tar -xz -C "$src" --strip-components=1
 fi
 
 has() {

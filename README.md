@@ -5,7 +5,7 @@
 ## 導入
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/urihcim/agent-setup/main/install.sh | sh
+gh api -H "Accept: application/vnd.github.raw" /repos/urihcim/agent-setup/contents/install.sh | sh
 ```
 
 チェックアウトしたリポジトリから `./install.sh` を実行してもよい。その場合はチェックアウトの内容が使われる。
@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/urihcim/agent-setup/main/install.sh
 
 ### Claude Code on the web
 
-環境設定のセットアップスクリプトに、上の `curl` の1行を書く。セットアップスクリプトは新しいセッションを作るたびに実行されるので、常に最新の内容が入る。
+環境設定のセットアップスクリプトに、上の `gh api` の1行を書く。リポジトリは private なので、`gh` の認証が通る環境で実行する。セットアップスクリプトは新しいセッションを作るたびに実行されるので、常に最新の内容が入る。
 
 ## 構成
 
