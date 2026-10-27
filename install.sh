@@ -1,13 +1,13 @@
-#!/bin/sh
+#!/bin/bash
 # クラウド環境（Claude Code on the web など）向けに、エージェントの指示と設定を配置する。
 # ローカル環境ではこのスクリプトは使わない。
 #
-#   curl -fsSL https://raw.githubusercontent.com/urihcim/agent-setup/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/urihcim/agent-setup/main/install.sh | bash
 #
 # チェックアウト済みのリポジトリから実行した場合はその内容を使い、
 # それ以外（パイプでの実行など）は最新のアーカイブを取得して使う。
 # 何度実行しても同じ結果になる。
-set -eu
+set -euo pipefail
 
 REPO=${AGENT_SETUP_REPO:-urihcim/agent-setup}
 REF=${AGENT_SETUP_REF:-main}
@@ -35,41 +35,26 @@ put() {
 # settings.json に追加分をマージする。オブジェクトは再帰的にマージし、
 # hooks は同じコマンドの既存エントリを置き換える。
 merge_json() {
-	python3 - "$@" <<'EOF'
-import json, sys
-
-dst_path, *src_paths = sys.argv[1:]
-try:
-    with open(dst_path) as f:
-        dst = json.load(f)
-except (FileNotFoundError, ValueError):
-    dst = {}
-
-def commands(entry):
-    return {h.get("command") for h in entry.get("hooks", [])}
-
-def merge(a, b, key=None):
-    if key == "hooks" and isinstance(a, dict) and isinstance(b, dict):
-        for event, entries in b.items():
-            ours = set().union(*map(commands, entries))
-            kept = [e for e in a.get(event, []) if not commands(e) & ours]
-            a[event] = kept + entries
-        return a
-    if isinstance(a, dict) and isinstance(b, dict):
-        for k, v in b.items():
-            a[k] = merge(a[k], v, k) if k in a else v
-        return a
-    return b
-
-for src_path in src_paths:
-    with open(src_path) as f:
-        dst = merge(dst, json.load(f))
-
-with open(dst_path + ".tmp", "w") as f:
-    json.dump(dst, f, indent=2, ensure_ascii=False)
-    f.write("\n")
-EOF
-	mv "$1.tmp" "$1"
+	local dst=$1
+	shift
+	[ -s "$dst" ] && jq -e . "$dst" >/dev/null 2>&1 || echo '{}' >"$dst"
+	jq '
+		def commands: [.hooks[]?.command];
+		def merge_hooks($b):
+			reduce ($b | to_entries[]) as $e (.;
+				($e.value | map(commands[])) as $ours
+				| .[$e.key] = ((.[$e.key] // []) | map(select(commands - $ours == commands))) + $e.value);
+		def merge($b):
+			if type == "object" and ($b | type) == "object" then
+				reduce ($b | to_entries[]) as $e (.;
+					if has($e.key) | not then .[$e.key] = $e.value
+					elif $e.key == "hooks" and (.[$e.key] | type) == "object" and ($e.value | type) == "object"
+					then .[$e.key] |= merge_hooks($e.value)
+					else .[$e.key] |= merge($e.value) end)
+			else $b end;
+		reduce inputs as $b (.; merge($b))
+	' "$dst" "$@" >"$dst.tmp"
+	mv "$dst.tmp" "$dst"
 }
 
 if has .claude claude; then

@@ -34,7 +34,7 @@
 ```bash
 #!/bin/bash
 set -euo pipefail
-curl -fsSL --retry 3 https://raw.githubusercontent.com/urihcim/agent-setup/main/install.sh | sh
+curl -fsSL --retry 3 https://raw.githubusercontent.com/urihcim/agent-setup/main/install.sh | bash
 ```
 
 リポジトリ固有の準備（データの取得など）が必要なプロジェクトは、この内容に処理を足した別の環境を作る。
