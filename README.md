@@ -1,16 +1,18 @@
 # agent-setup
 
-コーディングエージェント（Claude Code、Codex、Gemini CLI、Copilot CLI）向けの共通の指示と設定。
+コーディングエージェント（Claude Code、Codex、Gemini CLI、Copilot CLI）向けの共通の指示と設定。ローカルでもクラウドでも、このリポジトリを正本として使う。
 
-## 導入
+## 構成
 
-```sh
-gh api -H "Accept: application/vnd.github.raw" /repos/urihcim/agent-setup/contents/install.sh | sh
-```
+- `AGENTS.md`: 全エージェント共通の指示
+- `claude/settings.json`: Claude Code の設定。`~/.claude/settings.json` にマージする
+- `claude/cloud-settings.json`: クラウド環境だけで使う Claude Code のフックの登録
+- `claude/hooks/`: Claude Code のフック。`~/.claude/hooks/` に配置する
+  - `strip-pr-attribution.py`: Claude Projects が PR 本文に挿入する帰属ブロックを取り除く（クラウド用）
+  - `latest-instructions.sh`: 最新の `AGENTS.md` をセッション開始時にコンテキストへ加える（クラウド用）
+- `install.sh`: クラウド環境で上記を配置するスクリプト
 
-チェックアウトしたリポジトリから `./install.sh` を実行してもよい。その場合はチェックアウトの内容が使われる。
-
-何度実行しても同じ結果になる。インストール済みのエージェント（ホームの設定ディレクトリかコマンドがあるもの）にだけ、次のファイルを配置する。
+配置先は次のとおり。インストール済みのエージェント（ホームの設定ディレクトリかコマンドがあるもの）にだけ配置する。
 
 | エージェント | 配置先 |
 | --- | --- |
@@ -21,12 +23,20 @@ gh api -H "Accept: application/vnd.github.raw" /repos/urihcim/agent-setup/conten
 
 `settings.json` は既存の内容にマージする。オブジェクトは再帰的にマージし、`hooks` は同じコマンドのエントリを置き換える。
 
-### Claude Code on the web
+## ローカル環境
 
-環境設定のセットアップスクリプトに、上の `gh api` の1行を書く。リポジトリは private なので、`gh` の認証が通る環境で実行する。セットアップスクリプトは新しいセッションを作るたびに実行されるので、常に最新の内容が入る。
+`install.sh` は使わず、上の配置先に別の方法で配置する。
 
-## 構成
+## クラウド環境（Claude Code on the web）
 
-- `AGENTS.md`: 全エージェント共通の指示（正本）
-- `claude/settings.json`: Claude Code の設定に追加する分
-- `claude/hooks/strip-pr-attribution.py`: Claude Projects が PR 本文に挿入する帰属ブロックを取り除く PreToolUse フック
+全プロジェクトで共有するクラウド環境を1つ作り、セットアップスクリプトに次を書く。各プロジェクトはその環境を選ぶ。
+
+```bash
+#!/bin/bash
+set -euo pipefail
+curl -fsSL --retry 3 https://raw.githubusercontent.com/urihcim/agent-setup/main/install.sh | sh
+```
+
+リポジトリ固有の準備（データの取得など）が必要なプロジェクトは、この内容に処理を足した別の環境を作る。
+
+セットアップスクリプトの結果は数日キャッシュされ、その間は新しいセッションでもスクリプトが走らない。そのため `latest-instructions.sh` がセッション開始時に最新の `AGENTS.md` を取得し、配置済みの `~/.claude/CLAUDE.md` と違うときだけその内容をコンテキストに加える。フックや設定の変更は、キャッシュが作り直されるまで反映されない。すぐに反映するには、セットアップスクリプトを編集して保存し直す。
