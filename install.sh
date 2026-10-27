@@ -1,11 +1,12 @@
 #!/bin/sh
-# エージェント向けの指示と設定を、インストール済みのエージェントに配置する。
+# クラウド環境（Claude Code on the web など）向けに、エージェントの指示と設定を配置する。
+# ローカル環境ではこのスクリプトは使わない。
 #
-#   gh api -H "Accept: application/vnd.github.raw" /repos/urihcim/agent-setup/contents/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/urihcim/agent-setup/main/install.sh | sh
 #
 # チェックアウト済みのリポジトリから実行した場合はその内容を使い、
 # それ以外（パイプでの実行など）は最新のアーカイブを取得して使う。
-# private リポジトリでも取得できるよう、gh があれば gh api を使う。
+# 何度実行しても同じ結果になる。
 set -eu
 
 REPO=${AGENT_SETUP_REPO:-urihcim/agent-setup}
@@ -18,11 +19,8 @@ fi
 if [ -z "$src" ] || [ ! -f "$src/AGENTS.md" ]; then
 	src=$(mktemp -d)
 	trap 'rm -rf "$src"' EXIT
-	if command -v gh >/dev/null 2>&1; then
-		gh api "repos/$REPO/tarball/$REF"
-	else
-		curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.tar.gz"
-	fi | tar -xz -C "$src" --strip-components=1
+	curl -fsSL --retry 3 "https://github.com/$REPO/archive/refs/heads/$REF.tar.gz" |
+		tar -xz -C "$src" --strip-components=1
 fi
 
 has() {
@@ -37,17 +35,15 @@ put() {
 # settings.json に追加分をマージする。オブジェクトは再帰的にマージし、
 # hooks は同じコマンドの既存エントリを置き換える。
 merge_json() {
-	python3 - "$1" "$2" <<'EOF'
+	python3 - "$@" <<'EOF'
 import json, sys
 
-dst_path, src_path = sys.argv[1:]
+dst_path, *src_paths = sys.argv[1:]
 try:
     with open(dst_path) as f:
         dst = json.load(f)
 except (FileNotFoundError, ValueError):
     dst = {}
-with open(src_path) as f:
-    src = json.load(f)
 
 def commands(entry):
     return {h.get("command") for h in entry.get("hooks", [])}
@@ -65,8 +61,12 @@ def merge(a, b, key=None):
         return a
     return b
 
+for src_path in src_paths:
+    with open(src_path) as f:
+        dst = merge(dst, json.load(f))
+
 with open(dst_path + ".tmp", "w") as f:
-    json.dump(merge(dst, src), f, indent=2, ensure_ascii=False)
+    json.dump(dst, f, indent=2, ensure_ascii=False)
     f.write("\n")
 EOF
 	mv "$1.tmp" "$1"
@@ -74,12 +74,12 @@ EOF
 
 if has .claude claude; then
 	put "$src/AGENTS.md" "$HOME/.claude/CLAUDE.md"
-	mkdir -p "$HOME/.claude/hooks"
 	for f in "$src"/claude/hooks/*; do
 		put "$f" "$HOME/.claude/hooks/$(basename "$f")"
 		chmod +x "$HOME/.claude/hooks/$(basename "$f")"
 	done
-	merge_json "$HOME/.claude/settings.json" "$src/claude/settings.json"
+	merge_json "$HOME/.claude/settings.json" \
+		"$src/claude/settings.json" "$src/claude/cloud-settings.json"
 fi
 
 if has .codex codex; then
