@@ -9,6 +9,7 @@
 - `claude/cloud-settings.json`: クラウド環境だけで使う Claude Code のフックの登録
 - `claude/hooks/`: Claude Code のフック。`~/.claude/hooks/` に配置する
   - `strip-pr-attribution.py`: Claude Projects が PR 本文に挿入する帰属ブロックを取り除く（クラウド用）
+  - `check-branch-name.py`: `claude/project-thread-1q3tpw` のような変更内容がわからないブランチ名の作成と push を止める（クラウド用）
   - `latest-instructions.sh`: 最新の `AGENTS.md` をセッション開始時にコンテキストへ加える（クラウド用）
 - `install.sh`: クラウド環境で上記を配置するスクリプト
 
